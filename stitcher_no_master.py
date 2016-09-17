@@ -38,7 +38,7 @@ def stitcher_path():
     raise RuntimeError("Stitcher not found")
 
 
-def stitcher(image_path, n_rows, save_name, master=None):
+def stitcher(image_path, n_rows, save_name):
     """
     Example use:
     stitcher("/home/user/julyimages",16,"/home/user/stitchedimages/july")
@@ -57,8 +57,6 @@ def stitcher(image_path, n_rows, save_name, master=None):
     stitch_args = [stitcher_path(), '--batch-mode', '--export-quit', '--stitch', '--title', "Panorama",
                    '--images'] + imagepaths + ['--downward', '--rightward', '--nrows', n_rows, '--save-as', gigapansave,
                                                "--export", "TIFF", "0", imgsave]
-    if master:
-        stitch_args.extend(['--master', master])
     p = subprocess.Popen(stitch_args)
     start = time.time()
     finish = start + 12000
@@ -70,59 +68,41 @@ def stitcher(image_path, n_rows, save_name, master=None):
     return True
 
 
-def stitch_hour(path, n_rows, save_directory, name, year, month, day, hour, start, end, master, log):
+def stitch_hour(path, n_rows, save_directory, name, year, month, day, hour, start, end):
     date = datetime.datetime(int(year), int(month), int(day), int(hour))
     if start < date < end:
-        save_path = os.path.join(save_directory, "_".join([year, month, day, hour]),
+        save_path = os.path.join(save_directory,
                                  "_".join([name, year, month, day, hour, "00", "00", "00"]))
-        if stitcher(path, n_rows, save_path, master):
+        if stitcher(path, n_rows, save_path):
             notify("Success for {}: {}/{}/{} {}:00".format(name, day, month, year, hour))
             global last_success
             last_success = "{}/{}/{} {}:00".format(day, month, year, hour)
-            if log:
-                with open(log, 'a') as csvfile:
-                    data_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-                data_writer.writerow([year, month, day, hour, path, save_path, "success"])
         else:
             notify("Failure for {}: {}/{}/{} {}:00".format(name, day, month, year, hour))
-            if log:
-                with open(log, 'a') as csvfile:
-                    data_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-                data_writer.writerow([year, month, day, hour, path, save_path, "failure"])
 
 
-def stitch_day(path, n_rows, save_directory, name, year, month, day, start, end, master, log):
+def stitch_day(path, n_rows, save_directory, name, year, month, day, start, end):
     for hour in get_rel_subdirectories(path):
         if hour.split("_")[-1].isdigit() and len(hour.split("_")) == 4:
             stitch_hour(os.path.join(path, hour), n_rows, os.path.join(save_directory, hour), name, year, month, day,
-                        hour.split("_")[-1], start, end, master, log)
+                        hour.split("_")[-1], start, end)
 
 
-def stitch_month(path, n_rows, save_directory, name, year, month, start, end, master, log):
-    master_loc = None
-    if master:
-        master_loc = os.path.join(path, "master") + ".gigapan"
-        master_src = directories_at_depth(path, 1)[0]
-        notify("Master being written for {}/{}".format(month, year))
-        notify("From: {}\nTo: {}".format(master_src, master_loc))
-        if not stitcher(master_src, n_rows, os.path.join(path, "master")):
-            raise "Master image stitch failed"
-        notify("Master stitched")
+def stitch_month(path, n_rows, save_directory, name, year, month, start, end):
     for day in get_rel_subdirectories(path):
         if day.split("_")[-1].isdigit() and len(day.split("_")) == 3:
             stitch_day(os.path.join(path, day), n_rows, os.path.join(save_directory, day), name, year, month,
-                       day.split("_")[-1], start, end, master_loc, log)
+                       day.split("_")[-1], start, end)
 
 
-def stitch_year(path, n_rows, save_directory, name, year, start, end, master, log):
+def stitch_year(path, n_rows, save_directory, name, year, start, end):
     for month in get_rel_subdirectories(path):
         if month.split("_")[-1].isdigit() and len(month.split("_")) == 2:
             stitch_month(os.path.join(path, month), n_rows, os.path.join(save_directory, month), name, year,
-                         month.split("_")[-1], start, end, master, log)
+                         month.split("_")[-1], start, end)
 
 
-def stitch_stream(path, n_rows, save_directory, name, start=datetime.datetime.min, end=datetime.datetime.max,
-                  master=False, log=None):
+def stitch_stream(path, n_rows, save_directory, name, start=datetime.datetime.min, end=datetime.datetime.max):
     if not (n_rows is str):
         n_rows = str(n_rows)
     notify("Stitch started!\nRows: {}\nSource: {}\nSave: {}\nStart: {}\nEnd: {}".format(n_rows, path, save_directory,
@@ -130,8 +110,7 @@ def stitch_stream(path, n_rows, save_directory, name, start=datetime.datetime.mi
     try:
         for year in get_rel_subdirectories(path):
             if year.isdigit():
-                stitch_year(os.path.join(path, year), n_rows, os.path.join(save_directory, year), name, year, start, end,
-                            master, log)
+                stitch_year(os.path.join(path, year), n_rows, os.path.join(save_directory, year), name, year, start, end)
     except:
         print("Unexpected error!")
         print(sys.exc_info()[0])
